@@ -84,6 +84,8 @@ for core_id = unique_core_ids
     i = i+1;
 end
 
+pause
+
 % Plot RAPL deltas on different cores
 figure;
 i = 1;
