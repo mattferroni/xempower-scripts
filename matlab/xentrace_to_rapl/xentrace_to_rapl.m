@@ -3,16 +3,15 @@ clear
 
 
 % Import data -------------------------------------------------------------
-disp('Importing...');
+disp('- Import data');
 rapl_struct = importdata('rapl.csv');
 rapl_raw = rapl_struct.data;
 pmc_struct = importdata('pmc.csv');
 pmc_raw = pmc_struct.data;
-disp('- DONE');
 
 
 % Preprocessing -----------------------------------------------------------
-disp('Preprocessing...');
+disp('- Preprocessing');
 % 1. zero-tsc values
 zero_tsc_rapl_bitmask = rapl_raw(:,1)==0;            % bitmask: valid TSC values
 dropped_rapl_1 = rapl_raw(zero_tsc_rapl_bitmask,:);  % lines dropped
@@ -30,9 +29,10 @@ base_of_times = min(rapl_raw(1,1), pmc_raw(1,1));
 rapl_raw(:,1)=rapl_raw(:,1)-base_of_times;
 pmc_raw(:,1)=pmc_raw(:,1)-base_of_times;
 
-% Per-core information ----------------------------------------------------
 
+% Per-core information ----------------------------------------------------
 % Split measures per unique cores
+disp('- Split measures per unique cores');
 unique_core_ids = unique(rapl_raw(:,2))';    
 i = 1;
 for core_id = unique_core_ids
@@ -70,9 +70,10 @@ for core_id = unique_core_ids
 
     i = i+1;
 end
-disp('- DONE');
+
 
 % Plot RAPL logs on different cores
+disp('- Plot RAPL logs on different cores');
 figure;
 i = 1;
 for core_id = unique_core_ids
@@ -91,6 +92,7 @@ for core_id = unique_core_ids
 end
 
 % Plot RAPL deltas on different cores
+disp('- Plot RAPL deltas on different cores');
 figure;
 i = 1;
 for core_id = unique_core_ids
@@ -110,8 +112,8 @@ end
 
 
 % Per-domain information --------------------------------------------------
-
-% Split measures per unique cores
+% Split measures per unique domain
+disp('- Split measures per unique domain');
 unique_domain_ids = unique(pmc_raw(:,3))';    
 i = 1;
 for domain_id = unique_domain_ids
@@ -125,10 +127,9 @@ for domain_id = unique_domain_ids
 
     i = i+1;
 end
-disp('- DONE');
-
 
 % Plot PMC logs on different domains
+disp('- Plot PMC logs on different domains');
 figure;
 i = 1;
 for domain_id = unique_domain_ids
@@ -147,14 +148,20 @@ for domain_id = unique_domain_ids
 end
 
 
-
-
 % Plot PMC logs on different domains wrt RAPL
+disp('- Plot PMC logs on different domains wrt RAPL');
 rapl_pkg_all=rapl_raw(:,[1 5]); 
 rapl_pkg_all(:,2)=rapl_pkg_all(:,2)-rapl_pkg_all(1,2);       % Incremental wrt the first value
+rapl_pp0_all=rapl_raw(:,[1 5]); 
+rapl_pp0_all(:,2)=rapl_pp0_all(:,2)-rapl_pp0_all(1,2);       % Incremental wrt the first value
+rapl_pp1_all=rapl_raw(:,[1 5]); 
+rapl_pp1_all(:,2)=rapl_pp1_all(:,2)-rapl_pp1_all(1,2);       % Incremental wrt the first value
+rapl_dram_all=rapl_raw(:,[1 5]); 
+rapl_dram_all(:,2)=rapl_dram_all(:,2)-rapl_dram_all(1,2);    % Incremental wrt the first value
 
 figure;
-subplot(2,1,1);
+domains_count = length(unique_domain_ids);
+subplot(domains_count+1,1,1);
 
 hold on;
 plot(rapl_pkg_all(:,1), rapl_pkg_all(:,2), '.');
@@ -163,14 +170,24 @@ xlabel('Time Stamp Counter (TSC) ');
 ylabel('Counters');
 hold off;
 
-subplot(2,1,2);
-hold on;
-plot(counter_domain(1).pmc1(:,1), counter_domain(1).pmc1(:,2), '-');
-plot(counter_domain(2).pmc1(:,1), counter_domain(2).pmc1(:,2), '-');
-legend('dom0-pmc1','dom1-pmc1');
-xlabel('Time Stamp Counter (TSC) ');
-ylabel('Counters');
-hold off;
+i = 1;
+for domain_id = unique_domain_ids
+    subplot(domains_count+1,1,i+1);               % The first subplot is for RAPL
+    
+    hold on;
+    plot(counter_domain(i).pmc1(:,1), counter_domain(i).pmc1(:,2), '-');
+    % plot(counter_domain(i).pmc2(:,1),counter_domain(i).pmc2(:,2), '-');
+    % plot(counter_domain(i).pmc3(:,1),counter_domain(i).pmc3(:,2), '-');
+    % plot(counter_domain(i).pmc4(:,1),counter_domain(i).pmc4(:,2), '-');
+    
+    title(['xarc1-domain ' int2str(counter_domain(i).id)]);
+    legend('pmc1');                % legend('pmc1','pmc2','pmc3','pmc4');
+    xlabel('Time Stamp Counter (TSC) ');
+    ylabel('PMC Counter');
+    hold off;
+    
+    i = i+1;
+end
 
 
 
