@@ -4,13 +4,16 @@ clear
 energy_unit = 1/(2^16);     % RAPL specification for Intel i7-2600
 cpu_frequency = 3.4*10^9;   % 3.4GHz for Intel i7-2600
 
+
+
+
 % Import data -------------------------------------------------------------
 disp('- Import data');
 rapl_struct = importdata('rapl.csv');
 rapl_raw = rapl_struct.data;
 pmc_struct = importdata('pmc.csv');
 pmc_raw = pmc_struct.data;
-
+wattsup_struct = importdata('wattsup-watts');
 
 % Preprocessing -----------------------------------------------------------
 disp('- Preprocessing');
@@ -31,6 +34,49 @@ pmc_raw(:,1)=pmc_raw(:,1)/cpu_frequency;
 base_of_times = min(rapl_raw(1,1), pmc_raw(1,1));
 rapl_raw(:,1)=rapl_raw(:,1)-base_of_times;
 pmc_raw(:,1)=pmc_raw(:,1)-base_of_times;
+
+% 4. Oversample wattsup measurements
+wattsup_raw = pmc_raw(:,[1 2]);
+tests_length = length(wattsup_struct);
+i=1;
+while i <= tests_length
+    bitmask = wattsup_raw(:,1)<i & wattsup_raw(:,1)>=i-1;
+    wattsup_raw(bitmask, 2) = wattsup_struct(i);
+    i=i+1;
+end
+
+% 5. Merge RAPL information gathered on all cores
+rapl_pkg_all=rapl_raw(:,[1 5]); 
+rapl_pkg_all(:,2)=rapl_pkg_all(:,2)-rapl_pkg_all(1,2);       % Incremental wrt the first value
+rapl_pp0_all=rapl_raw(:,[1 5]); 
+rapl_pp0_all(:,2)=rapl_pp0_all(:,2)-rapl_pp0_all(1,2);       % Incremental wrt the first value
+rapl_pp1_all=rapl_raw(:,[1 5]); 
+rapl_pp1_all(:,2)=rapl_pp1_all(:,2)-rapl_pp1_all(1,2);       % Incremental wrt the first value
+rapl_dram_all=rapl_raw(:,[1 5]); 
+rapl_dram_all(:,2)=rapl_dram_all(:,2)-rapl_dram_all(1,2);    % Incremental wrt the first value
+
+% 6. Estimate derivative of the RAPL_PKG counter (instantaneous Watt?)
+rapl_pkg_dt = diff(rapl_pkg_all(:,1)); % dt is the time intervals length, dt is N-1 length. 
+rapl_pkg_dI = diff(rapl_pkg_all(:,2));  
+rapl_pkg_derivative = rapl_pkg_dI./rapl_pkg_dt; %derivative is memberwise division of dI by dt 
+rapl_pkg_derivative = [rapl_pkg_derivative' rapl_pkg_derivative(end)]';
+
+
+
+tests_length = length(unique(floor(rapl_raw(:,1))));
+i=1;
+while i <= tests_length
+    % TODO: aggiungi qui una var aggintiva, undersample e poi riallunga
+    bitmask = rapl_raw(:,1)<i & rapl_raw(:,1)>=i-1;
+    wattsup_raw(bitmask, 2) = wattsup_struct(i);
+    i=i+1;
+end
+
+
+derivative_step = floor(length(rapl_raw(:,1))/tests_length);
+derivative_index = 1:derivative_step:length(rapl_raw(:,1));
+subsample = [rapl_raw(derivative_index, 1) , rapl_raw(derivative_index, 2)];
+
 
 
 % Per-core information ----------------------------------------------------
@@ -74,7 +120,7 @@ for core_id = unique_core_ids
     i = i+1;
 end
 
-
+%{
 % Plot RAPL logs on different cores
 disp('- Plot RAPL logs on different cores');
 figure;
@@ -112,6 +158,9 @@ for core_id = unique_core_ids
     hold off;
     i = i+1;
 end
+%}
+
+
 
 
 % Per-domain information --------------------------------------------------
@@ -121,7 +170,7 @@ unique_domain_ids = unique(pmc_raw(:,3))';
 i = 1;
 for domain_id = unique_domain_ids
     domain_bitmask = pmc_raw(:,3)== domain_id;   % bitmask: domain_id data
-    counter_domain(i).id = domain_id;             % Counter wrt the first
+    counter_domain(i).id = domain_id;            % Counter wrt the first
 
     counter_domain(i).pmc1 = pmc_raw(domain_bitmask,[1 5]);  
     counter_domain(i).pmc2 = pmc_raw(domain_bitmask,[1 6]);
@@ -131,6 +180,7 @@ for domain_id = unique_domain_ids
     i = i+1;
 end
 
+%{
 % Plot PMC logs on different domains
 disp('- Plot PMC logs on different domains');
 figure;
@@ -150,32 +200,19 @@ for domain_id = unique_domain_ids
     hold off;
     i = i+1;
 end
-
+%}
 
 % Plot PMC logs on different domains wrt RAPL
 disp('- Plot PMC logs on different domains wrt RAPL');
-rapl_pkg_all=rapl_raw(:,[1 5]); 
-rapl_pkg_all(:,2)=rapl_pkg_all(:,2)-rapl_pkg_all(1,2);       % Incremental wrt the first value
-rapl_pp0_all=rapl_raw(:,[1 5]); 
-rapl_pp0_all(:,2)=rapl_pp0_all(:,2)-rapl_pp0_all(1,2);       % Incremental wrt the first value
-rapl_pp1_all=rapl_raw(:,[1 5]); 
-rapl_pp1_all(:,2)=rapl_pp1_all(:,2)-rapl_pp1_all(1,2);       % Incremental wrt the first value
-rapl_dram_all=rapl_raw(:,[1 5]); 
-rapl_dram_all(:,2)=rapl_dram_all(:,2)-rapl_dram_all(1,2);    % Incremental wrt the first value
-
-rapl_pkg_dt = diff(rapl_pkg_all(:,1)); % dt is the time intervals length, dt is N-1 length. 
-rapl_pkg_dI = diff(rapl_pkg_all(:,2));  
-rapl_pkg_derivative = rapl_pkg_dI./rapl_pkg_dt; %derivative is memberwise division of dI by dt 
-rapl_pkg_derivative = [rapl_pkg_derivative' rapl_pkg_derivative(end)]';
 
 figure;
 subplot(3,1,1);
 
 hold on;
-plot(rapl_pkg_all(:,1), rapl_pkg_all(:,2), '.');
-legend('pkg');
+[hAx,hLine1,hLine2] = plotyy(rapl_pkg_all(:,1), rapl_pkg_all(:,2), wattsup_raw(:,1), wattsup_raw(:,2));
 xlabel('Time (s)');
-ylabel('RAPL counters');
+ylabel(hAx(1),'RAPL counters');    % left y-axis
+ylabel(hAx(2),'Watts Up (W)');     % right y-axis
 hold off;
 
 subplot(3,1,2);               % The first subplot is for RAPL
@@ -204,6 +241,9 @@ xlabel('Time (s)');
 ylabel('PMC Counter');
 hold off;
 
-figure;
-plotyy(rapl_pkg_all(:,1),rapl_pkg_all(:,2),[counter_domain(1).pmc1(:,1)',counter_domain(2).pmc1(:,1)',counter_domain(3).pmc1(:,1)',counter_domain(4).pmc1(:,1)'],[counter_domain(1).pmc1(:,2)',counter_domain(2).pmc1(:,2)',counter_domain(3).pmc1(:,2)',counter_domain(4).pmc1(:,2)']);
+% --- RANDOM TESTS ---
+% figure;
+% plotyy(rapl_pkg_all(:,1),rapl_pkg_all(:,2),[counter_domain(1).pmc1(:,1)',counter_domain(2).pmc1(:,1)',counter_domain(3).pmc1(:,1)',counter_domain(4).pmc1(:,1)'],[counter_domain(1).pmc1(:,2)',counter_domain(2).pmc1(:,2)',counter_domain(3).pmc1(:,2)',counter_domain(4).pmc1(:,2)']);
+
+%}
 
