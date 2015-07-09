@@ -14,13 +14,13 @@ rapl_struct = importdata('rapl.csv');
 rapl_raw = rapl_struct.data;
 pmc_struct = importdata('pmc.csv');
 pmc_raw = pmc_struct.data;
-wattsup_struct = importdata('wattsup-watts');
+wattsup_raw = importdata('wattsup-watts');
 
 % Preprocessing -----------------------------------------------------------
 disp('- Preprocessing');
 % 1. zero-tsc values
-zero_tsc_rapl_bitmask = rapl_raw(:,1)==0;            % bitmask: valid TSC values
-rapl_raw(zero_tsc_rapl_bitmask,:)=[];                % matrix filtered
+zero_tsc_rapl_bitmask = rapl_raw(:,1)==0;          % bitmask: valid TSC values
+rapl_raw(zero_tsc_rapl_bitmask,:)=[];              % matrix filtered
 zero_tsc_pmc_bitmask = pmc_raw(:,1)==0;            % bitmask: valid TSC values
 pmc_raw(zero_tsc_pmc_bitmask,:)=[];                % matrix filtered
 
@@ -33,18 +33,6 @@ pmc_raw(:,1)=pmc_raw(:,1)/cpu_frequency;
 base_of_times = min(rapl_raw(1,1), pmc_raw(1,1));
 rapl_raw(:,1)=rapl_raw(:,1)-base_of_times;
 pmc_raw(:,1)=pmc_raw(:,1)-base_of_times;
-
-% 4. Oversample wattsup measurements - TODO: remove this and use time series (see later)
-wattsup_raw = pmc_raw(:,[1 2]);
-tests_length = length(wattsup_struct);
-i=1;
-while i <= tests_length
-    bitmask = wattsup_raw(:,1)<i & wattsup_raw(:,1)>=i-1;
-    wattsup_raw(bitmask, 2) = wattsup_struct(i);
-    i=i+1;
-end
-wattsup_ts_old=timeseries(wattsup_raw(:,2), wattsup_raw(:,1), 'Name', 'wattsup');
-
 
 % 5. Merge RAPL information gathered on all cores
 rapl_pkg_all=rapl_raw(:,[1 5]); 
@@ -64,24 +52,15 @@ rapl_dram_all(:,2)=rapl_dram_all(:,2)-rapl_dram_all(1,2);    % Incremental wrt t
 rapl_dram_ts=timeseries(rapl_dram_all(:,2), rapl_dram_all(:,1), 'Name', 'rapl_dram');
 
 % 6. Resample all the timeseries
-tests_length = min(length(wattsup_struct),length(unique(floor(rapl_raw(:,1)))));
+tests_length = min(length(wattsup_raw),length(unique(floor(rapl_raw(:,1)))));
+
 rapl_pkg_ts_resample=resample(rapl_pkg_ts, 1:resample_delta:tests_length);
-wattsup_ts = timeseries(wattsup_struct,1:tests_length,'Name','wattsup');
+
+wattsup_ts = timeseries(wattsup_raw,1:tests_length,'Name','wattsup');
 wattsup_ts = setinterpmethod(wattsup_ts,'zoh');
-wattsup_ts_resample=resample(wattsup_ts, 1:resample_delta:tests_length);        % TODO - add here: setinterpmethod(ts,'zoh')
+wattsup_ts_resample=resample(wattsup_ts, 1:resample_delta:tests_length);
 
-
-wattsup_ts = timeseries(wattsup_struct,1:tests_length,'Name','wattsup');
-wattsup_ts = setinterpmethod(wattsup_ts,'zoh');
-plot(wattsup_ts);
-
-figure;
-hold on;
-plot(wattsup_ts_old.time,wattsup_ts_old.data);
-plot(wattsup_ts.time,wattsup_ts.data);
-hold off;
-
-% 7. Estimate power on the RAPL_PKG counter
+% 7. Estimate power on the RAPL_PKG counter and resample
 dt=diff(rapl_pkg_ts_resample.time);
 dE=diff(rapl_pkg_ts_resample.data);
 power=dE./dt;
