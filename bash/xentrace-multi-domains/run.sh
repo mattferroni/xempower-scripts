@@ -1,9 +1,32 @@
 #!/bin/bash
+#usage: ./run.sh
+#echo every command
+set -x
 
-TIME_SLACK=10
+# in seconds
+TIME_SLACK=20
+TESTS_LENGTH=120
+TESTS_FOLDER=/home/matteo/workspace/tests
+
+# Watt's up? Power Meter setup
+WATTSUP=/home/matteo/workspace/watts-up/wattsup
+WATTSUP_USB=ttyUSB0
+
+# Current date-time format (e.g.: 2013-07-07-16.10)
+NOW=`/bin/date +"%Y-%m-%d-%H.%M"`
+CURRENT_FOLDER=$TESTS_FOLDER/xentrace-to-rapl-$NOW
+
+# Create dir $CURRENT_FOLDER if !exists
+if [ ! -d $CURRENT_FOLDER ]; then
+	mkdir -p $CURRENT_FOLDER
+fi
+
+# Only Watts
+echo "Storing wattsup infos (watts) for "$TESTS_LENGTH"s..."
+$WATTSUP -c $TESTS_LENGTH $WATTSUP_USB watts -r > $CURRENT_FOLDER/wattsup-watts &
 
 echo $(date +%s.%N) " - Starting Xentrace..."
-./start_xentrace.sh
+./start_xentrace.sh $CURRENT_FOLDER
 START=$(date +%s.%N)
 echo $(date +%s.%N) " - Xentrace started."
 
@@ -46,11 +69,11 @@ echo $(date +%s.%N) " - Domain 3 stopped."
 sleep 5
 
 echo $(date +%s.%N) " - Stopping Xentrace..."
-./stop_xentrace.sh
+./stop_xentrace.sh 
 END=$(date +%s.%N)
 DIFF=$(echo "$END - $START" | bc)
 echo $(date +%s.%N) " - Xentrace stopped. Duration: "$DIFF"s."
 
 echo $(date +%s.%N) " - Parsing trace data..."
-./parse_data.sh
+./parse_data.sh $CURRENT_FOLDER
 echo $(date +%s.%N) " - CSV file produced."

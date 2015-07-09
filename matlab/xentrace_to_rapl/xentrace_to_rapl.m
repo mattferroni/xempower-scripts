@@ -1,6 +1,8 @@
 clc
 clear
 
+energy_unit = 1/(2^16);     % RAPL specification for Intel i7-2600
+cpu_frequency = 3.4*10^9;   % 3.4GHz for Intel i7-2600
 
 % Import data -------------------------------------------------------------
 disp('- Import data');
@@ -21,8 +23,9 @@ dropped_pmc_1 = pmc_raw(zero_tsc_pmc_bitmask,:);   % lines dropped
 pmc_raw(zero_tsc_pmc_bitmask,:)=[];                % matrix filtered
 
 % 2. Convert counters to the right unit
-energy_unit = 1/(2^16);
 rapl_raw(:,[5 6 7 8])=energy_unit*rapl_raw(:,[5 6 7 8]);
+rapl_raw(:,1)=rapl_raw(:,1)/cpu_frequency;
+pmc_raw(:,1)=pmc_raw(:,1)/cpu_frequency;
 
 % 3. Time incremental wrt the first value
 base_of_times = min(rapl_raw(1,1), pmc_raw(1,1));
@@ -85,7 +88,7 @@ for core_id = unique_core_ids
     plot(counter_core(i).dram(:,1),counter_core(i).dram(:,2), '.');
     title(['xarc1-core ' int2str(counter_core(i).id)]);
     legend('pkg','pp0','pp1','dram');
-    xlabel('Time Stamp Counter (TSC) ');
+    xlabel('Time (s)');
     ylabel('RAPL Counter');
     hold off;
     i = i+1;
@@ -104,7 +107,7 @@ for core_id = unique_core_ids
     plot(delta_core(i).dram(:,1),delta_core(i).dram(:,2), '.');
     title(['xarc1-core ' int2str(delta_core(i).id)]);
     legend('pkg','pp0','pp1','dram');
-    xlabel('Time Stamp Counter (TSC) ');
+    xlabel('Time (s)');
     ylabel('RAPL Counter');
     hold off;
     i = i+1;
@@ -131,9 +134,10 @@ end
 % Plot PMC logs on different domains
 disp('- Plot PMC logs on different domains');
 figure;
+domains_count = length(unique_domain_ids);
 i = 1;
 for domain_id = unique_domain_ids
-    subplot(2,2,i);
+    subplot(domains_count,1,i);
     hold on;
     plot(counter_domain(i).pmc1(:,1), counter_domain(i).pmc1(:,2), '-');
     plot(counter_domain(i).pmc2(:,1),counter_domain(i).pmc2(:,2), '-');
@@ -141,7 +145,7 @@ for domain_id = unique_domain_ids
     plot(counter_domain(i).pmc4(:,1),counter_domain(i).pmc4(:,2), '-');
     title(['xarc1-domain ' int2str(counter_domain(i).id)]);
     legend('pmc1','pmc2','pmc3','pmc4');
-    xlabel('Time Stamp Counter (TSC) ');
+    xlabel('Time (s)');
     ylabel('PMC Counter');
     hold off;
     i = i+1;
@@ -159,35 +163,47 @@ rapl_pp1_all(:,2)=rapl_pp1_all(:,2)-rapl_pp1_all(1,2);       % Incremental wrt t
 rapl_dram_all=rapl_raw(:,[1 5]); 
 rapl_dram_all(:,2)=rapl_dram_all(:,2)-rapl_dram_all(1,2);    % Incremental wrt the first value
 
+rapl_pkg_dt = diff(rapl_pkg_all(:,1)); % dt is the time intervals length, dt is N-1 length. 
+rapl_pkg_dI = diff(rapl_pkg_all(:,2));  
+rapl_pkg_derivative = rapl_pkg_dI./rapl_pkg_dt; %derivative is memberwise division of dI by dt 
+rapl_pkg_derivative = [rapl_pkg_derivative' rapl_pkg_derivative(end)]';
+
 figure;
-domains_count = length(unique_domain_ids);
-subplot(domains_count+1,1,1);
+subplot(3,1,1);
 
 hold on;
 plot(rapl_pkg_all(:,1), rapl_pkg_all(:,2), '.');
 legend('pkg');
-xlabel('Time Stamp Counter (TSC) ');
-ylabel('Counters');
+xlabel('Time (s)');
+ylabel('RAPL counters');
 hold off;
 
+subplot(3,1,2);               % The first subplot is for RAPL
+hold on;
+plot(rapl_pkg_all(:,1), rapl_pkg_derivative);
+xlabel('Time (s)');
+ylabel('RAPL derivative');
+hold off;
+
+subplot(3,1,3);               % The first subplot is for RAPL
+hold on;
 i = 1;
 for domain_id = unique_domain_ids
-    subplot(domains_count+1,1,i+1);               % The first subplot is for RAPL
-    
-    hold on;
+ 
     plot(counter_domain(i).pmc1(:,1), counter_domain(i).pmc1(:,2), '-');
     % plot(counter_domain(i).pmc2(:,1),counter_domain(i).pmc2(:,2), '-');
     % plot(counter_domain(i).pmc3(:,1),counter_domain(i).pmc3(:,2), '-');
     % plot(counter_domain(i).pmc4(:,1),counter_domain(i).pmc4(:,2), '-');
-    
-    title(['xarc1-domain ' int2str(counter_domain(i).id)]);
-    legend('pmc1');                % legend('pmc1','pmc2','pmc3','pmc4');
-    xlabel('Time Stamp Counter (TSC) ');
-    ylabel('PMC Counter');
-    hold off;
-    
+    legendInfo{i} = ['dom-' int2str(counter_domain(i).id)];
     i = i+1;
 end
 
+title('PMC1 on different domains');
+legend(legendInfo);
+xlabel('Time (s)');
+ylabel('PMC Counter');
+hold off;
 
+figure;
+plotyy(rapl_pkg_all(:,1),rapl_pkg_all(:,2),[counter_domain(1).pmc1(:,1)',counter_domain(2).pmc1(:,1)',counter_domain(3).pmc1(:,1)',counter_domain(4).pmc1(:,1)'],[counter_domain(1).pmc1(:,2)',counter_domain(2).pmc1(:,2)',counter_domain(3).pmc1(:,2)',counter_domain(4).pmc1(:,2)']);
 
