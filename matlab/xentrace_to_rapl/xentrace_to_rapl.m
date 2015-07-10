@@ -98,7 +98,8 @@ end
 % Per-domain information filtering ----------------------------------------
 % Split measures per unique domain
 disp('- Split measures per unique domain');
-unique_domain_ids = unique(pmc_raw(:,3))';    
+unique_domain_ids = unique(pmc_raw(:,3))';
+base=rapl_pkg_ts;
 i = 1;
 for domain_id = unique_domain_ids
     domain_bitmask = pmc_raw(:,3)== domain_id;   % bitmask: domain_id data
@@ -109,10 +110,10 @@ for domain_id = unique_domain_ids
     
     counter_domain(i).pmc(2).raw = pmc_raw(domain_bitmask,[1 6]);
     counter_domain(i).pmc(2).cum_ts = cumulate_and_resample(counter_domain(i).pmc(2).raw(:,1), counter_domain(i).pmc(2).raw(:,2), 1, resample_delta, tests_length);
-    
+
     counter_domain(i).pmc(3).raw = pmc_raw(domain_bitmask,[1 7]);
     counter_domain(i).pmc(3).cum_ts = cumulate_and_resample(counter_domain(i).pmc(3).raw(:,1), counter_domain(i).pmc(3).raw(:,2), 1, resample_delta, tests_length);
-    
+
     counter_domain(i).pmc(4).raw = pmc_raw(domain_bitmask,[1 8]);
     counter_domain(i).pmc(4).cum_ts = cumulate_and_resample(counter_domain(i).pmc(4).raw(:,1), counter_domain(i).pmc(4).raw(:,2), 1, resample_delta, tests_length);
     
@@ -132,41 +133,35 @@ grid on;
 grid minor;
 hold off;
 
-% Plot Package Energy and Power (RAPL), with PMC1 for every domain
-disp('- Plot Package Energy and Power (RAPL), with PMC for every domain');
+% Plot Package Energy and Power (RAPL), with PMCi for every domain
+disp('- Plot Package Energy and Power (RAPL), with PMCi for every domain');
 figure;
+total_plots = 1+length(unique_domain_ids);
 
-subplot(2,1,1);
-hold on;
-grid on;
-[hAx,hLine1,hLine2] = plotyy(rapl_pkg_ts_resample.time, rapl_pkg_ts_resample.data, power_pkg_ts_resample.time, power_pkg_ts_resample.data);
-title('RAPL measurements');
-legend('Package Energy (RAPL)','Package Power (RAPL)');
-xlabel('Time (s)');
-ylabel(hAx(1),'Energy (J)');    % left y-axis
-ylabel(hAx(2),'Power (W)');     % right y-axis
-grid on;
-grid minor;
-hold off;
+subplot(total_plots,1,1);
+plot_energy_and_power(rapl_pkg_ts_resample.time, rapl_pkg_ts_resample.data, power_pkg_ts_resample.time, power_pkg_ts_resample.data);
 
-subplot(2,1,2);               % The first subplot is for RAPL
-hold on;
 i = 1;
 for domain_id = unique_domain_ids
+    subplot(total_plots,1,i+1);
+    hold on;
+    j=1;
     for current_pmc = pmc_to_plot
         plot(counter_domain(i).pmc(current_pmc).cum_ts.time, counter_domain(i).pmc(current_pmc).cum_ts.data, '-');
-        legend_index=i+current_pmc-1;
+        legend_index=j;
         legendInfo{legend_index} = ['dom-' int2str(counter_domain(i).id) '-pmc' int2str(current_pmc)];
+        j=j+1;
     end
+    title(['PMCs of dom-' int2str(counter_domain(i).id)]);
+    legend(legendInfo);
+    xlabel('Time (s)');
+    ylabel('PMC value');
+    grid on;
+    grid minor;
+    hold off;
     i = i+1;
 end
-title('PMC1 on different domains');
-legend(legendInfo);
-xlabel('Time (s)');
-ylabel('PMC Counter');
-grid on;
-grid minor;
-hold off;
+
 
 
 %{   
