@@ -3,9 +3,8 @@ clear
 
 energy_unit = 1/(2^16);     % RAPL specification for Intel i7-2600
 cpu_frequency = 3.4*10^9;   % 3.4GHz for Intel i7-2600
-resample_delta=0.1;           % Granularity of the resampling (seconds)
-
-
+resample_delta = 0.1;         % Granularity of the resampling (seconds)
+pmc_to_plot = [1 4];      % PMCs to plot on the graphs
 
 
 % Import data -------------------------------------------------------------
@@ -16,51 +15,55 @@ pmc_struct = importdata('pmc.csv');
 pmc_raw = pmc_struct.data;
 wattsup_raw = importdata('wattsup-watts');
 
+
 % Preprocessing -----------------------------------------------------------
 disp('- Preprocessing');
-% 1. zero-tsc values
+% zero-tsc values
 zero_tsc_rapl_bitmask = rapl_raw(:,1)==0;          % bitmask: valid TSC values
 rapl_raw(zero_tsc_rapl_bitmask,:)=[];              % matrix filtered
 zero_tsc_pmc_bitmask = pmc_raw(:,1)==0;            % bitmask: valid TSC values
 pmc_raw(zero_tsc_pmc_bitmask,:)=[];                % matrix filtered
 
-% 2. Convert counters to the right unit
+% Convert counters to the right unit
 rapl_raw(:,[5 6 7 8])=energy_unit*rapl_raw(:,[5 6 7 8]);
 rapl_raw(:,1)=rapl_raw(:,1)/cpu_frequency;
 pmc_raw(:,1)=pmc_raw(:,1)/cpu_frequency;
 
-% 3. Time incremental wrt the first value
+% Time incremental wrt the first value
 base_of_times = min(rapl_raw(1,1), pmc_raw(1,1));
 rapl_raw(:,1)=rapl_raw(:,1)-base_of_times;
 pmc_raw(:,1)=pmc_raw(:,1)-base_of_times;
 
-% 5. Merge RAPL information gathered on all cores
+
+% Grouping and conditioning -----------------------------------------------------------
+disp('- Grouping and conditioning');
+% Merge RAPL information gathered on all cores
 rapl_pkg_all=rapl_raw(:,[1 5]); 
 rapl_pkg_all(:,2)=rapl_pkg_all(:,2)-rapl_pkg_all(1,2);       % Incremental wrt the first value
 rapl_pkg_ts=timeseries(rapl_pkg_all(:,2), rapl_pkg_all(:,1), 'Name', 'rapl_pkg');
-
 rapl_pp0_all=rapl_raw(:,[1 5]); 
 rapl_pp0_all(:,2)=rapl_pp0_all(:,2)-rapl_pp0_all(1,2);       % Incremental wrt the first value
 rapl_pp0_ts=timeseries(rapl_pp0_all(:,2), rapl_pp0_all(:,1), 'Name', 'rapl_pp0');
-
 rapl_pp1_all=rapl_raw(:,[1 5]); 
 rapl_pp1_all(:,2)=rapl_pp1_all(:,2)-rapl_pp1_all(1,2);       % Incremental wrt the first value
 rapl_pp1_ts=timeseries(rapl_pp1_all(:,2), rapl_pp1_all(:,1), 'Name', 'rapl_pp1');
-
 rapl_dram_all=rapl_raw(:,[1 5]); 
 rapl_dram_all(:,2)=rapl_dram_all(:,2)-rapl_dram_all(1,2);    % Incremental wrt the first value
 rapl_dram_ts=timeseries(rapl_dram_all(:,2), rapl_dram_all(:,1), 'Name', 'rapl_dram');
 
-% 6. Resample all the timeseries
+% Resample all the timeseries
 tests_length = min(length(wattsup_raw),length(unique(floor(rapl_raw(:,1)))));
-
 rapl_pkg_ts_resample=resample(rapl_pkg_ts, 1:resample_delta:tests_length);
+rapl_pp0_ts_resample=resample(rapl_pp0_ts, 1:resample_delta:tests_length);
+rapl_pp1_ts_resample=resample(rapl_pp1_ts, 1:resample_delta:tests_length);
+rapl_dram_ts_resample=resample(rapl_dram_ts, 1:resample_delta:tests_length);
 
+% Uniform Wattsup measurements
 wattsup_ts = timeseries(wattsup_raw,1:tests_length,'Name','wattsup');
 wattsup_ts = setinterpmethod(wattsup_ts,'zoh');
 wattsup_ts_resample=resample(wattsup_ts, 1:resample_delta:tests_length);
 
-% 7. Estimate power on the RAPL_PKG counter and resample
+% Estimate power on the RAPL_PKG counter and resample
 dt=diff(rapl_pkg_ts_resample.time);     % differential time
 dE=diff(rapl_pkg_ts_resample.data);     % differential data
 power=dE./dt;
@@ -75,35 +78,18 @@ i = 1;
 for core_id = unique_core_ids
     core_bitmask = rapl_raw(:,2)== core_id;   % bitmask: core_id data
     counter_core(i).id = core_id;             % Counter wrt the first
-    delta_core(i).id = core_id;               % Counter wrt the previous
 
     counter_core(i).pkg = rapl_raw(core_bitmask,[1 5]);  
     counter_core(i).pkg(:,2)=counter_core(i).pkg(:,2)-counter_core(i).pkg(1,2);       % Incremental wrt the first value
-    delta_core(i).pkg = rapl_raw(core_bitmask,[1 5]);
-    shift = [delta_core(i).pkg(1,2) delta_core(i).pkg(:,2)']';
-    shift = shift(1:end-1);
-    delta_core(i).pkg(:,2)=delta_core(i).pkg(:,2)-shift;
         
     counter_core(i).pp0 = rapl_raw(core_bitmask,[1 6]);
     counter_core(i).pp0(:,2)=counter_core(i).pp0(:,2)-counter_core(i).pp0(1,2);       % Incremental wrt the first value
-    delta_core(i).pp0 = rapl_raw(core_bitmask,[1 6]);
-    shift = [delta_core(i).pp0(1,2) delta_core(i).pp0(:,2)']';
-    shift = shift(1:end-1);
-    delta_core(i).pp0(:,2)=delta_core(i).pp0(:,2)-shift;
     
     counter_core(i).pp1 = rapl_raw(core_bitmask,[1 7]);
     counter_core(i).pp1(:,2)=counter_core(i).pp1(:,2)-counter_core(i).pp1(1,2);       % Incremental wrt the first value
-    delta_core(i).pp1 = rapl_raw(core_bitmask,[1 7]);
-    shift = [delta_core(i).pp1(1,2) delta_core(i).pp1(:,2)']';
-    shift = shift(1:end-1);
-    delta_core(i).pp1(:,2)=delta_core(i).pp1(:,2)-shift;
     
     counter_core(i).dram = rapl_raw(core_bitmask,[1 8]);
     counter_core(i).dram(:,2)=counter_core(i).dram(:,2)-counter_core(i).dram(1,2);    % Incremental wrt the first value
-    delta_core(i).dram = rapl_raw(core_bitmask,[1 8]);
-    shift = [delta_core(i).dram(1,2) delta_core(i).dram(:,2)']';
-    shift = shift(1:end-1);
-    delta_core(i).dram(:,2)=delta_core(i).dram(:,2)-shift;
 
     i = i+1;
 end
@@ -118,19 +104,18 @@ for domain_id = unique_domain_ids
     domain_bitmask = pmc_raw(:,3)== domain_id;   % bitmask: domain_id data
     counter_domain(i).id = domain_id;            % Counter wrt the first
 
-    counter_domain(i).pmc1 = pmc_raw(domain_bitmask,[1 5]);
-    % PMC cumulated
-    pmc_integral = cumsum(counter_domain(i).pmc1(:,2));
-    pmc_ts = timeseries(pmc_integral,counter_domain(i).pmc1(:,1));
-    pmc_ts_resample=resample(pmc_ts, 1:resample_delta:tests_length);
-    pmc_resample = diff([pmc_ts_resample.data]);
-    counter_domain(i).pmc1_ts=timeseries([pmc_resample' pmc_resample(end)]', pmc_ts_resample.time, 'Name','PMC1');
+    counter_domain(i).pmc(1).raw = pmc_raw(domain_bitmask,[1 5]);
+    counter_domain(i).pmc(1).cum_ts = cumulate_and_resample(counter_domain(i).pmc(1).raw(:,1), counter_domain(i).pmc(1).raw(:,2), 1, resample_delta, tests_length);
     
-    % TODO - Add other pmcs here!
-    counter_domain(i).pmc2 = pmc_raw(domain_bitmask,[1 6]);
-    counter_domain(i).pmc3 = pmc_raw(domain_bitmask,[1 7]);
-    counter_domain(i).pmc4 = pmc_raw(domain_bitmask,[1 8]);
-
+    counter_domain(i).pmc(2).raw = pmc_raw(domain_bitmask,[1 6]);
+    counter_domain(i).pmc(2).cum_ts = cumulate_and_resample(counter_domain(i).pmc(2).raw(:,1), counter_domain(i).pmc(2).raw(:,2), 1, resample_delta, tests_length);
+    
+    counter_domain(i).pmc(3).raw = pmc_raw(domain_bitmask,[1 7]);
+    counter_domain(i).pmc(3).cum_ts = cumulate_and_resample(counter_domain(i).pmc(3).raw(:,1), counter_domain(i).pmc(3).raw(:,2), 1, resample_delta, tests_length);
+    
+    counter_domain(i).pmc(4).raw = pmc_raw(domain_bitmask,[1 8]);
+    counter_domain(i).pmc(4).cum_ts = cumulate_and_resample(counter_domain(i).pmc(4).raw(:,1), counter_domain(i).pmc(4).raw(:,2), 1, resample_delta, tests_length);
+    
     i = i+1;
 end
 
@@ -148,7 +133,7 @@ grid minor;
 hold off;
 
 % Plot Package Energy and Power (RAPL), with PMC1 for every domain
-disp('- Plot Package Energy and Power (RAPL), with PMC1 for every domain');
+disp('- Plot Package Energy and Power (RAPL), with PMC for every domain');
 figure;
 
 subplot(2,1,1);
@@ -168,9 +153,11 @@ subplot(2,1,2);               % The first subplot is for RAPL
 hold on;
 i = 1;
 for domain_id = unique_domain_ids
- 
-    plot(counter_domain(i).pmc1_ts.time, counter_domain(i).pmc1_ts.data, '-');
-    legendInfo{i} = ['dom-' int2str(counter_domain(i).id)];
+    for current_pmc = pmc_to_plot
+        plot(counter_domain(i).pmc(current_pmc).cum_ts.time, counter_domain(i).pmc(current_pmc).cum_ts.data, '-');
+        legend_index=i+current_pmc-1;
+        legendInfo{legend_index} = ['dom-' int2str(counter_domain(i).id) '-pmc' int2str(current_pmc)];
+    end
     i = i+1;
 end
 title('PMC1 on different domains');
@@ -242,11 +229,6 @@ i = 1;
 for core_id = unique_core_ids
     subplot(2,2,i);
     hold on;
-    plot(delta_core(i).pkg(:,1), delta_core(i).pkg(:,2), '.');
-    plot(delta_core(i).pp0(:,1),delta_core(i).pp0(:,2), '.');
-    plot(delta_core(i).pp1(:,1),delta_core(i).pp1(:,2), '.');
-    plot(delta_core(i).dram(:,1),delta_core(i).dram(:,2), '.');
-    title(['xarc1-core ' int2str(delta_core(i).id)]);
     legend('pkg','pp0','pp1','dram');
     xlabel('Time (s)');
     ylabel('RAPL Counter');
