@@ -31,17 +31,27 @@ echo $(date +%s.%N) " - Starting domain 1..."
 ./start_domain.sh 1 2
 echo $(date +%s.%N) " - Domain 1 started."
 
+echo "Pinning dom 1"
+sudo xl vcpu-pin Co1 0 1
+sudo xl vcpu-pin Co1 1 2
+
 sleep $TIME_SLACK
 
 echo $(date +%s.%N) " - Starting domain 2..."
 ./start_domain.sh 2 1
 echo $(date +%s.%N) " - Domain 2 started."
 
+echo "Pinning dom 2"
+sudo xl vcpu-pin Co2 0 2
+
 sleep $TIME_SLACK
 
 echo $(date +%s.%N) " - Starting domain 3..."
 ./start_domain.sh 3 1
 echo $(date +%s.%N) " - Domain 3 started."
+
+echo "Pinning dom 3"
+sudo xl vcpu-pin Co3 0 3
 
 sleep $TIME_SLACK
 
@@ -73,4 +83,4 @@ echo $(date +%s.%N) " - Parsing trace data..."
 ./parse_data.sh $CURRENT_FOLDER
 echo $(date +%s.%N) " - CSV file produced."
 
-chown -R matteo:matteo $CURRENT_FOLDER/*
+sudo chown -R matteo:matteo $CURRENT_FOLDER
