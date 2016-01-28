@@ -5,16 +5,22 @@
 # in seconds
 TIME_SLACK=20
 TESTS_LENGTH=110
-TESTS_FOLDER=/home/matteo/workspace/tests
+TESTS_FOLDER=$HOME/workspace/tests
+CURRENT_USER=$(stat -c '%U' $HOME)
 
 # Current date-time format (e.g.: 2013-07-07-16.10)
 NOW=`/bin/date +"%Y-%m-%d-%H.%M"`
 CURRENT_FOLDER=$TESTS_FOLDER/xentrace-to-rapl-$NOW
+MAPPING_FILE=$CURRENT_FOLDER"/domain_mapping.csv"
+
 
 # Create dir $CURRENT_FOLDER if !exists
 if [ ! -d $CURRENT_FOLDER ]; then
 	mkdir -p $CURRENT_FOLDER
 fi
+
+# Add label line to mapping file
+echo "NAME_DOM,NUMBER_DOM">> $MAPPING_FILE
 
 echo $(date +%s.%N) " - Starting Watt's up? Power Meter..."
 ./start_wattsup.sh $TESTS_LENGTH $CURRENT_FOLDER
@@ -30,6 +36,8 @@ sleep 5
 echo $(date +%s.%N) " - Starting domain 1..."
 ./start_domain.sh 1 2
 echo $(date +%s.%N) " - Domain 1 started."
+MAPPING_CO1=$(sudo xl list Co1 |awk '{print $2}' | sed -n 2p)
+echo "Co1,"$MAPPING_CO1 >> $MAPPING_FILE
 
 echo "Pinning dom 1"
 sudo xl vcpu-pin Co1 0 1
@@ -40,6 +48,8 @@ sleep $TIME_SLACK
 echo $(date +%s.%N) " - Starting domain 2..."
 ./start_domain.sh 2 1
 echo $(date +%s.%N) " - Domain 2 started."
+MAPPING_CO2=$(sudo xl list Co2 |awk '{print $2}' | sed -n 2p)
+echo "Co2,"$MAPPING_CO2 >> $MAPPING_FILE
 
 echo "Pinning dom 2"
 sudo xl vcpu-pin Co2 0 2
@@ -49,7 +59,8 @@ sleep $TIME_SLACK
 echo $(date +%s.%N) " - Starting domain 3..."
 ./start_domain.sh 3 1
 echo $(date +%s.%N) " - Domain 3 started."
-
+MAPPING_CO3=$(sudo xl list Co3 |awk '{print $2}' | sed -n 2p)
+echo "Co3,"$MAPPING_CO3 >> $MAPPING_FILE
 echo "Pinning dom 3"
 sudo xl vcpu-pin Co3 0 3
 
@@ -83,4 +94,4 @@ echo $(date +%s.%N) " - Parsing trace data..."
 ./parse_data.sh $CURRENT_FOLDER
 echo $(date +%s.%N) " - CSV file produced."
 
-sudo chown -R matteo:matteo $CURRENT_FOLDER
+sudo chown -R $CURRENT_USER:$CURRENT_USER $CURRENT_FOLDER

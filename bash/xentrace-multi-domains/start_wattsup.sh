@@ -7,7 +7,7 @@ TESTS_LENGTH=$1
 CURRENT_FOLDER=$2
 
 # Watt's up? Power Meter setup
-WATTSUP=/home/matteo/workspace/watts-up/wattsup
+WATTSUP=$HOME/workspace/watts-up/wattsup
 WATTSUP_USB=ttyUSB0
 
 # Start tracing
