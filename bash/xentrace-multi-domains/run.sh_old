@@ -4,7 +4,7 @@
 
 # in seconds
 TIME_SLACK=20
-TESTS_LENGTH=90
+TESTS_LENGTH=110
 TESTS_FOLDER=/home/teof/workspace/tests
 
 # Current date-time format (e.g.: 2013-07-07-16.10)
