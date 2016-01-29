@@ -4,7 +4,6 @@
 
 # in seconds
 TIME_SLACK=20
-TESTS_LENGTH=110
 TESTS_FOLDER=$HOME/workspace/tests
 WATTSUP_USB="/dev/ttyUSB0"
 CURRENT_USER=$(stat -c '%U' $HOME)
@@ -17,8 +16,8 @@ WATTSUP_CLEAR="echo '#R,W,0;' > $WATTSUP_USB"
 NOW=`/bin/date +"%Y-%m-%d-%H.%M"`
 CURRENT_FOLDER=$TESTS_FOLDER/xentrace-to-rapl-$NOW
 MAPPING_FILE=$CURRENT_FOLDER"/domain_mapping.csv"
+WATTSUP_OUTPUT_TMP=$CURRENT_FOLDER"/watts-up-tmp"
 WATTSUP_OUTPUT=$CURRENT_FOLDER"/watts-up"
-
 
 # Create dir $CURRENT_FOLDER if !exists
 if [ ! -d $CURRENT_FOLDER ]; then
@@ -99,7 +98,7 @@ DIFF=$(echo "$END - $START" | bc)
 echo $(date +%s.%N) " - Xentrace stopped. Duration: "$DIFF"s."
 
 echo $(date +%s.%N) " - Stopping wattsup log..."
-./wattsup_reader $WATTSUP_USB $WATTSUP_OUTPUT & 
+./wattsup_reader $WATTSUP_USB $WATTSUP_OUTPUT_TMP & 
 sleep 1
 eval ${WATTSUP_GET_DATA}
 eval ${WATTSUP_LOW_LOAD}
@@ -107,5 +106,6 @@ eval ${WATTSUP_LOW_LOAD}
 echo $(date +%s.%N) " - Parsing trace data..."
 ./parse_data.sh $CURRENT_FOLDER
 echo $(date +%s.%N) " - CSV file produced."
-
+python parser_wattsup_output.py $WATTSUP_OUTPUT_TMP $WATTSUP_OUTPUT
+rm $WATTSUP_OUTPUT_TMP
 sudo chown -R $CURRENT_USER:$CURRENT_USER $CURRENT_FOLDER
