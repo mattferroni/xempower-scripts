@@ -6,12 +6,18 @@
 TIME_SLACK=20
 TESTS_LENGTH=110
 TESTS_FOLDER=$HOME/workspace/tests
+WATTSUP_USB="/dev/ttyUSB0"
 CURRENT_USER=$(stat -c '%U' $HOME)
+WATTSUP_START_LOG="echo '#L,W,3,I,,1;' > $WATTSUP_USB"
+WATTSUP_LOW_LOAD="echo '#L,W,3,E,,3600;' > $WATTSUP_USB"
+WATTSUP_GET_DATA="echo '#D,R,0;' > $WATTSUP_USB"
+WATTSUP_CLEAR="echo '#R,W,0;' > $WATTSUP_USB"
 
 # Current date-time format (e.g.: 2013-07-07-16.10)
 NOW=`/bin/date +"%Y-%m-%d-%H.%M"`
 CURRENT_FOLDER=$TESTS_FOLDER/xentrace-to-rapl-$NOW
 MAPPING_FILE=$CURRENT_FOLDER"/domain_mapping.csv"
+WATTSUP_OUTPUT=$CURRENT_FOLDER"/watts-up"
 
 
 # Create dir $CURRENT_FOLDER if !exists
@@ -23,7 +29,9 @@ fi
 echo "NAME_DOM,NUMBER_DOM">> $MAPPING_FILE
 
 echo $(date +%s.%N) " - Starting Watt's up? Power Meter..."
-./start_wattsup.sh $TESTS_LENGTH $CURRENT_FOLDER
+eval ${WATTSUP_CLEAR}
+sleep 1
+eval ${WATTSUP_START_LOG}
 echo $(date +%s.%N) " - Watt's up? Power Meter started."
 
 echo $(date +%s.%N) " - Starting Xentrace..."
@@ -89,6 +97,12 @@ echo $(date +%s.%N) " - Stopping Xentrace..."
 END=$(date +%s.%N)
 DIFF=$(echo "$END - $START" | bc)
 echo $(date +%s.%N) " - Xentrace stopped. Duration: "$DIFF"s."
+
+echo $(date +%s.%N) " - Stopping wattsup log..."
+./wattsup_reader $WATTSUP_USB $WATTSUP_OUTPUT & 
+sleep 1
+eval ${WATTSUP_GET_DATA}
+eval ${WATTSUP_LOW_LOAD}
 
 echo $(date +%s.%N) " - Parsing trace data..."
 ./parse_data.sh $CURRENT_FOLDER
