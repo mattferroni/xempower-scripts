@@ -3,7 +3,7 @@
 #echo every command
 
 # in seconds
-TIME_SLACK=20
+TIME_SLACK=1000
 TESTS_FOLDER=$HOME/workspace/tests
 WATTSUP_USB="/dev/ttyUSB0"
 CURRENT_USER=$(stat -c '%U' $HOME)
@@ -17,7 +17,7 @@ NOW=`/bin/date +"%Y-%m-%d-%H.%M"`
 CURRENT_FOLDER=$TESTS_FOLDER/xentrace-to-rapl-$NOW
 MAPPING_FILE=$CURRENT_FOLDER"/domain_mapping.csv"
 WATTSUP_OUTPUT_TMP=$CURRENT_FOLDER"/watts-up-tmp"
-WATTSUP_OUTPUT=$CURRENT_FOLDER"/watts-up"
+WATTSUP_OUTPUT=$CURRENT_FOLDER"/wattsup-watts"
 
 # Create dir $CURRENT_FOLDER if !exists
 if [ ! -d $CURRENT_FOLDER ]; then
