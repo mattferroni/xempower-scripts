@@ -1,0 +1,384 @@
+    write_msr(IA32_FIXED_CTR0, ZERO_VALUE, ZERO_VALUE);                         /* writing on: ia32_fixed_ctr0: zero value (Vol. 3C, Page 35-18) */
+    write_msr(IA32_FIXED_CTR1, ZERO_VALUE, ZERO_VALUE);                         /* writing on: ia32_fixed_ctr1: zero value (Vol. 3C, Page 35-18) */
+    write_msr(IA32_FIXED_CTR2, ZERO_VALUE, ZERO_VALUE);                         /* writing on: ia32_fixed_ctr2: zero value (Vol. 3C, Page 35-18) */
+    write_msr(IA32_PERF_FIXED_CTR_CTRL, ENABLE_CTR_0_2_USER_MODE, ZERO_VALUE);  /* writing on: ia32_perf_fixed_ctr_ctrl; ensure 3 FFCs enabled, user-level monitoring */
+    write_msr(IA32_PERF_GLOBAL_CTRL, ENABLE_PMC_0_3, ENABLE_CTR_0_2);           /* writing on: ia32_perf_global_ctrl: enable 8 PMCs & 3 FFCs */
+    write_msr(IA32_MPERF_REG, ZERO_VALUE, ZERO_VALUE);                          /*writing on: ia32_aperf: reset value*/
+    write_msr(IA32_APERF_REG, ZERO_VALUE, ZERO_VALUE);                          /*writing on: ia32_aperf: reset value*/
+    CUSTOM_LOGT("TRACING: sched->do_schedule() ---------------\n");
+
+    /* XEMPOWER_TAG */
+
+
+
+
+    next_slice = sched->do_schedule(sched, now, tasklet_work_scheduled);
+
+    next = next_slice.task;
+
+    sd->curr = next;
+
+    if ( next_slice.time >= 0 ) /* -ve means no limit */
+        set_timer(&sd->s_timer, now + next_slice.time);
+
+    if ( unlikely(prev == next) )
+    {
+        pcpu_schedule_unlock_irq(lock, cpu);
+        trace_continue_running(next);
+        return continue_running(prev);
+    }
+
+    TRACE_2D(TRC_SCHED_SWITCH_INFPREV,
+             prev->domain->domain_id,
+             now - prev->runstate.state_entry_time);
+    TRACE_3D(TRC_SCHED_SWITCH_INFNEXT,
+             next->domain->domain_id,
+             (next->runstate.state == RUNSTATE_runnable) ?
+             (now - next->runstate.state_entry_time) : 0,
+             next_slice.time);
+
+    ASSERT(prev->runstate.state == RUNSTATE_running);
+
+    TRACE_4D(TRC_SCHED_SWITCH,
+             prev->domain->domain_id, prev->vcpu_id,
+             next->domain->domain_id, next->vcpu_id);
+
+    vcpu_runstate_change(
+        prev,
+        (test_bit(_VPF_blocked, &prev->pause_flags) ? RUNSTATE_blocked :
+         (vcpu_runnable(prev) ? RUNSTATE_runnable : RUNSTATE_offline)),
+        now);
+    prev->last_run_time = now;
+
+    ASSERT(next->runstate.state != RUNSTATE_running);
+    vcpu_runstate_change(next, RUNSTATE_running, now);
+
+    /*
+     * NB. Don't add any trace records from here until the actual context
+     * switch, else lost_records resume will not work properly.
+     */
+
+    ASSERT(!next->is_running);
+    next->is_running = 1;
+
+    pcpu_schedule_unlock_irq(lock, cpu);
+
+    SCHED_STAT_CRANK(sched_ctx);
+
+    stop_timer(&prev->periodic_timer);
+
+    if ( next_slice.migrated )
+        evtchn_move_pirqs(next);
+
+    vcpu_periodic_timer_work(next);
+
+    context_switch(prev, next);
+}
+
+void context_saved(struct vcpu *prev)
+{
+    /* Clear running flag /after/ writing context to memory. */
+    smp_wmb();
+
+    prev->is_running = 0;
+
+    /* Check for migration request /after/ clearing running flag. */
+    smp_mb();
+
+    SCHED_OP(VCPU2OP(prev), context_saved, prev);
+
+    if ( unlikely(test_bit(_VPF_migrating, &prev->pause_flags)) )
+        vcpu_migrate(prev);
+}
+
+/* The scheduler timer: force a run through the scheduler */
+static void s_timer_fn(void *unused)
+{
+    raise_softirq(SCHEDULE_SOFTIRQ);
+    SCHED_STAT_CRANK(sched_irq);
+}
+
+/* Per-VCPU periodic timer function: sends a virtual timer interrupt. */
+static void vcpu_periodic_timer_fn(void *data)
+{
+    struct vcpu *v = data;
+    vcpu_periodic_timer_work(v);
+}
+
+/* Per-VCPU single-shot timer function: sends a virtual timer interrupt. */
+static void vcpu_singleshot_timer_fn(void *data)
+{
+    struct vcpu *v = data;
+    send_timer_event(v);
+}
+
+/* SCHEDOP_poll timeout callback. */
+static void poll_timer_fn(void *data)
+{
+    struct vcpu *v = data;
+
+    if ( test_and_clear_bit(v->vcpu_id, v->domain->poll_mask) )
+        vcpu_unblock(v);
+}
+
+static int cpu_schedule_up(unsigned int cpu)
+{
+    struct schedule_data *sd = &per_cpu(schedule_data, cpu);
+
+    per_cpu(scheduler, cpu) = &ops;
+    spin_lock_init(&sd->_lock);
+    sd->schedule_lock = &sd->_lock;
+    sd->curr = idle_vcpu[cpu];
+    init_timer(&sd->s_timer, s_timer_fn, NULL, cpu);
+    atomic_set(&sd->urgent_count, 0);
+
+    /* Boot CPU is dealt with later in schedule_init(). */
+    if ( cpu == 0 )
+        return 0;
+
+    if ( idle_vcpu[cpu] == NULL )
+        alloc_vcpu(idle_vcpu[0]->domain, cpu, cpu);
+    if ( idle_vcpu[cpu] == NULL )
+        return -ENOMEM;
+
+    if ( (ops.alloc_pdata != NULL) &&
+         ((sd->sched_priv = ops.alloc_pdata(&ops, cpu)) == NULL) )
+        return -ENOMEM;
+
+    return 0;
+}
+
+static void cpu_schedule_down(unsigned int cpu)
+{
+    struct schedule_data *sd = &per_cpu(schedule_data, cpu);
+
+    if ( sd->sched_priv != NULL )
+        SCHED_OP(&ops, free_pdata, sd->sched_priv, cpu);
+
+    kill_timer(&sd->s_timer);
+}
+
+static int cpu_schedule_callback(
+    struct notifier_block *nfb, unsigned long action, void *hcpu)
+{
+    unsigned int cpu = (unsigned long)hcpu;
+    int rc = 0;
+
+    switch ( action )
+    {
+    case CPU_UP_PREPARE:
+        rc = cpu_schedule_up(cpu);
+        break;
+    case CPU_UP_CANCELED:
+    case CPU_DEAD:
+        cpu_schedule_down(cpu);
+        break;
+    default:
+        break;
+    }
+
+    return !rc ? NOTIFY_DONE : notifier_from_errno(rc);
+}
+
+static struct notifier_block cpu_schedule_nfb = {
+    .notifier_call = cpu_schedule_callback
+};
+
+/* Initialise the data structures. */
+void __init scheduler_init(void)
+{
+    struct domain *idle_domain;
+    int i;
+
+    open_softirq(SCHEDULE_SOFTIRQ, schedule);
+
+    for ( i = 0; i < ARRAY_SIZE(schedulers); i++ )
+    {
+        if ( schedulers[i]->global_init && schedulers[i]->global_init() < 0 )
+            schedulers[i] = NULL;
+        else if ( !ops.name && !strcmp(schedulers[i]->opt_name, opt_sched) )
+            ops = *schedulers[i];
+    }
+
+    if ( !ops.name )
+    {
+        printk("Could not find scheduler: %s\n", opt_sched);
+        for ( i = 0; i < ARRAY_SIZE(schedulers); i++ )
+            if ( schedulers[i] )
+            {
+                ops = *schedulers[i];
+                break;
+            }
+        BUG_ON(!ops.name);
+        printk("Using '%s' (%s)\n", ops.name, ops.opt_name);
+    }
+
+    if ( cpu_schedule_up(0) )
+        BUG();
+    register_cpu_notifier(&cpu_schedule_nfb);
+
+    printk("Using scheduler: %s (%s)\n", ops.name, ops.opt_name);
+    if ( SCHED_OP(&ops, init) )
+        panic("scheduler returned error on init");
+
+    if ( sched_ratelimit_us &&
+         (sched_ratelimit_us > XEN_SYSCTL_SCHED_RATELIMIT_MAX
+          || sched_ratelimit_us < XEN_SYSCTL_SCHED_RATELIMIT_MIN) )
+    {
+        printk("WARNING: sched_ratelimit_us outside of valid range [%d,%d].\n"
+               " Resetting to default %u\n",
+               XEN_SYSCTL_SCHED_RATELIMIT_MIN,
+               XEN_SYSCTL_SCHED_RATELIMIT_MAX,
+               SCHED_DEFAULT_RATELIMIT_US);
+        sched_ratelimit_us = SCHED_DEFAULT_RATELIMIT_US;
+    }
+
+    idle_domain = domain_create(DOMID_IDLE, 0, 0);
+    BUG_ON(IS_ERR(idle_domain));
+    idle_domain->vcpu = idle_vcpu;
+    idle_domain->max_vcpus = nr_cpu_ids;
+    if ( alloc_vcpu(idle_domain, 0, 0) == NULL )
+        BUG();
+    if ( ops.alloc_pdata &&
+         !(this_cpu(schedule_data).sched_priv = ops.alloc_pdata(&ops, 0)) )
+        BUG();
+}
+
+int schedule_cpu_switch(unsigned int cpu, struct cpupool *c)
+{
+    unsigned long flags;
+    struct vcpu *idle;
+    spinlock_t *lock;
+    void *ppriv, *ppriv_old, *vpriv, *vpriv_old;
+    struct scheduler *old_ops = per_cpu(scheduler, cpu);
+    struct scheduler *new_ops = (c == NULL) ? &ops : c->sched;
+
+    if ( old_ops == new_ops )
+        return 0;
+
+    idle = idle_vcpu[cpu];
+    ppriv = SCHED_OP(new_ops, alloc_pdata, cpu);
+    if ( ppriv == NULL )
+        return -ENOMEM;
+    vpriv = SCHED_OP(new_ops, alloc_vdata, idle, idle->domain->sched_priv);
+    if ( vpriv == NULL )
+    {
+        SCHED_OP(new_ops, free_pdata, ppriv, cpu);
+        return -ENOMEM;
+    }
+
+    lock = pcpu_schedule_lock_irqsave(cpu, &flags);
+
+    SCHED_OP(old_ops, tick_suspend, cpu);
+    vpriv_old = idle->sched_priv;
+    idle->sched_priv = vpriv;
+    per_cpu(scheduler, cpu) = new_ops;
+    ppriv_old = per_cpu(schedule_data, cpu).sched_priv;
+    per_cpu(schedule_data, cpu).sched_priv = ppriv;
+    SCHED_OP(new_ops, tick_resume, cpu);
+    SCHED_OP(new_ops, insert_vcpu, idle);
+
+    pcpu_schedule_unlock_irqrestore(lock, flags, cpu);
+
+    SCHED_OP(old_ops, free_vdata, vpriv_old);
+    SCHED_OP(old_ops, free_pdata, ppriv_old, cpu);
+
+    return 0;
+}
+
+struct scheduler *scheduler_get_default(void)
+{
+    return &ops;
+}
+
+struct scheduler *scheduler_alloc(unsigned int sched_id, int *perr)
+{
+    int i;
+    struct scheduler *sched;
+
+    for ( i = 0; i < ARRAY_SIZE(schedulers); i++ )
+        if ( schedulers[i] && schedulers[i]->sched_id == sched_id )
+            goto found;
+    *perr = -ENOENT;
+    return NULL;
+
+ found:
+    *perr = -ENOMEM;
+    if ( (sched = xmalloc(struct scheduler)) == NULL )
+        return NULL;
+    memcpy(sched, schedulers[i], sizeof(*sched));
+    if ( (*perr = SCHED_OP(sched, init)) != 0 )
+    {
+        xfree(sched);
+        sched = NULL;
+    }
+
+    return sched;
+}
+
+void scheduler_free(struct scheduler *sched)
+{
+    BUG_ON(sched == &ops);
+    SCHED_OP(sched, deinit);
+    xfree(sched);
+}
+
+void schedule_dump(struct cpupool *c)
+{
+    int               i;
+    struct scheduler *sched;
+    cpumask_t        *cpus;
+
+    sched = (c == NULL) ? &ops : c->sched;
+    cpus = cpupool_scheduler_cpumask(c);
+    printk("Scheduler: %s (%s)\n", sched->name, sched->opt_name);
+    SCHED_OP(sched, dump_settings);
+
+    for_each_cpu (i, cpus)
+    {
+        spinlock_t *lock = pcpu_schedule_lock(i);
+
+        printk("CPU[%02d] ", i);
+        SCHED_OP(sched, dump_cpu_state, i);
+        pcpu_schedule_unlock(lock, i);
+    }
+}
+
+void sched_tick_suspend(void)
+{
+    struct scheduler *sched;
+    unsigned int cpu = smp_processor_id();
+
+    sched = per_cpu(scheduler, cpu);
+    SCHED_OP(sched, tick_suspend, cpu);
+}
+
+void sched_tick_resume(void)
+{
+    struct scheduler *sched;
+    unsigned int cpu = smp_processor_id();
+
+    sched = per_cpu(scheduler, cpu);
+    SCHED_OP(sched, tick_resume, cpu);
+}
+
+void wait(void)
+{
+    schedule();
+}
+
+#ifdef CONFIG_COMPAT
+#include "compat/schedule.c"
+#endif
+
+#endif /* !COMPAT */
+
+/*
+ * Local variables:
+ * mode: C
+ * c-file-style: "BSD"
+ * c-basic-offset: 4
+ * tab-width: 4
+ * indent-tabs-mode: nil
+ * End:
+ */
