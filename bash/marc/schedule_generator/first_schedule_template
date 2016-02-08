@@ -1,3 +1,18 @@
+/****************************************************************************
+ * (C) 2002-2003 - Rolf Neugebauer - Intel Research Cambridge
+ * (C) 2002-2003 University of Cambridge
+ * (C) 2004      - Mark Williamson - Intel Research Cambridge
+ ****************************************************************************
+ *
+ *        File: common/schedule.c
+ *      Author: Rolf Neugebauer & Keir Fraser
+ *              Updated for generic API by Mark Williamson
+ * 
+ * Description: Generic CPU scheduling code
+ *              implements support functionality for the Xen scheduler API.
+ *
+ */
+
 #ifndef COMPAT
 #include <xen/config.h>
 #include <xen/init.h>
@@ -1268,6 +1283,7 @@ static void schedule(void)
      #define IA32_PERFEVTSEL5           0x18b
      #define IA32_PERFEVTSEL6           0x18c
      #define IA32_PERFEVTSEL7           0x18d
+     #define IA32_PEBS_ENABLE           0x3f1
 
      /*RAPL COUNTERS ADDRESSES*/
      #define MSR_RAPL_POWER_UNIT        0x606
@@ -1373,6 +1389,7 @@ static void schedule(void)
     /* Read counters */
     write_msr(IA32_PERF_GLOBAL_CTRL, ZERO_VALUE, ZERO_VALUE);           /* ia32_perf_global_ctrl: disable 4 PMCs & 3 FFCs */
     write_msr(IA32_PERF_FIXED_CTR_CTRL, ZERO_VALUE, ZERO_VALUE);        /* ia32_perf_fixed_ctr_ctrl: clean up FFC ctrls */
+    write_msr(IA32_PEBS_ENABLE, ZERO_VALUE, ZERO_VALUE);                /* ia32_pebs_enable: disable pebs on pmc0-pmc3 */
     ia32_pmc0 = read_msr(IA32_PMC0);                                    /* ia32_pmc0: read value (Vol. 3C, Page 35-5) */ 
     ia32_pmc1 = read_msr(IA32_PMC1);                                    /* ia32_pmc1: read value (Vol. 3C, Page 35-5) */    
     ia32_pmc2 = read_msr(IA32_PMC2);                                    /* ia32_pmc2: read value (Vol. 3C, Page 35-5) */    
