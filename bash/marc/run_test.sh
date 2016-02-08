@@ -3,7 +3,7 @@
 set -e
 
 #add path in /etc/environment
-HOME=$HOME_XEN
+HOME=/home/matteo
 
 XEMPOWER_DIR=$HOME/xempower
 SCHEDULE_DIR=$XEMPOWER_DIR/xen/common
@@ -30,8 +30,8 @@ WATTSUP_LOW_LOAD="echo '#L,W,3,E,,3600;' > $WATTSUP_USB"
 WATTSUP_GET_DATA="echo '#D,R,0;' > $WATTSUP_USB"
 WATTSUP_CLEAR="echo '#R,W,0;' > $WATTSUP_USB"
 
-EXECUTION_TIME=50
-MAX_ITERATION=2
+EXECUTION_TIME=500
+MAX_ITERATION=7
 CURRENT_USER=$(stat -c '%U' $HOME)
 # Current date-time format (e.g.: 2013-07-07-16.10)
 NOW=`/bin/date +"%Y-%m-%d-%H.%M"`
@@ -47,6 +47,7 @@ RESTORE_FILES=$SCRIPTS_DIR/restore_schedules_file.sh
 if [ ! -f $ITERATION_FILE ]; then
 	echo 0 > $ITERATION_FILE
 	cd $XEMPOWER_DIR
+	rm $SCHEDULE_DIR/schedule.o
 	sudo colormake -j8 xen | grep 'schedule' && sudo colormake install && sudo ldconfig -v
 	sudo reboot
 fi
@@ -74,11 +75,11 @@ cat $START_XENTRACE_TEMPLATE $START_XENTRACE_TAIL >> $START_XENTRACE_SCRIPT
 chmod +x $START_XENTRACE_SCRIPT
 echo $(date +%s.%N) " - start_xentrace script updated"
 
-sleep 10
+sleep 15
 
 echo $(date +%s.%N) " - Starting Watt's up? Power Meter..."
 sudo $WATTSUP -c 5 ttyUSB0 watts
-sleep 1
+sleep 5
 eval ${WATTSUP_CLEAR}
 sleep 1
 eval ${WATTSUP_START_LOG}
@@ -145,6 +146,7 @@ if [ "$NEXT_VALUE" -le "$MAX_ITERATION" ]; then
 	echo $NEXT_VALUE > $ITERATION_FILE
 	cd $XEMPOWER_DIR
 	echo $(date +%s.%N) " - Making and Installing Xen..."
+	rm $SCHEDULE_DIR/schedule.o
 	sudo colormake -j8 xen | grep 'schedule' && sudo colormake install && sudo ldconfig -v
 	echo $(date +%s.%N) " - Xen installation completed. Reboot"
 	sudo reboot
