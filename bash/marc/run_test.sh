@@ -30,8 +30,8 @@ WATTSUP_LOW_LOAD="echo '#L,W,3,E,,3600;' > $WATTSUP_USB"
 WATTSUP_GET_DATA="echo '#D,R,0;' > $WATTSUP_USB"
 WATTSUP_CLEAR="echo '#R,W,0;' > $WATTSUP_USB"
 
-EXECUTION_TIME=500
-MAX_ITERATION=7
+EXECUTION_TIME=20
+MAX_ITERATION=1
 CURRENT_USER=$(stat -c '%U' $HOME)
 # Current date-time format (e.g.: 2013-07-07-16.10)
 NOW=`/bin/date +"%Y-%m-%d-%H.%M"`
@@ -59,7 +59,7 @@ fi
 
 echo $(date +%s.%N) " - Starting xen..."
 cd $XEMPOWER_DIR
-sudo service xencommons start
+sudo service xencommons restart
 echo $(date +%s.%N) " - Xen started"
 
 cd $MARC_SCRIPTS_DIR
@@ -93,21 +93,20 @@ echo $(date +%s.%N) " - Xentrace started."
 
 sleep 5
 
-echo $(date +%s.%N) " - Starting domain 1..."
-$START_DOMAIN 1 2 $HOME
-echo $(date +%s.%N) " - Domain 1 started."
-MAPPING_CO1=$(sudo xl list Co1 |awk '{print $2}' | sed -n 2p)
-echo "Co1,"$MAPPING_CO1 >> $MAPPING_FILE
+echo $(date +%s.%N) " - Starting domain 2..."
+$START_DOMAIN 2 2 $HOME
+echo $(date +%s.%N) " - Domain 2 started."
+MAPPING_CO2=$(sudo xl list Co2 |awk '{print $2}' | sed -n 2p)
+echo "Co2,"$MAPPING_CO2 >> $MAPPING_FILE
 
-echo "Pinning dom 1"
-sudo xl vcpu-pin Co1 0 1
-sudo xl vcpu-pin Co1 1 2
+echo "Pinning dom 2"
+sudo xl vcpu-pin Co2 0 2
 
 sleep $EXECUTION_TIME
 
-echo $(date +%s.%N) " - Stopping domain 1..."
-$STOP_DOMAIN 1
-echo $(date +%s.%N) " - Domain 1 stopped."
+echo $(date +%s.%N) " - Stopping domain 2..."
+$STOP_DOMAIN 2
+echo $(date +%s.%N) " - Domain 2 stopped."
 
 sleep 5
 
