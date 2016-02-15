@@ -105,13 +105,13 @@ MAPPING_MARC=$(sudo xl list marc |awk '{print $2}' | sed -n 2p)
 echo "marc,"$MAPPING_MARC >> $MAPPING_FILE
 echo $(date +%s.%N) " - Marc domain started"
 
-sleep 10
+sleep 60
 
 echo $(date +%s.%N) " - Sending commands to Marc domain..."
-ssh marc@10.0.0.2 'screen -d -m /home/marc/stress_iterative_benchmark'
+ssh marc@10.0.0.2 'screen -d -m /home/marc/stress_iterative_benchmark_v2'
 echo $(date +%s.%N) " - Command sent"
 
-sleep $EXECUTION_TIME
+sleep 2820s
 
 echo $(date +%s.%N) " - Stopping domain marc..."
 ssh marc@10.0.0.2 'sudo halt'
@@ -154,6 +154,7 @@ if [ "$NEXT_VALUE" -le "$MAX_ITERATION" ]; then
 	echo $NEXT_VALUE > $ITERATION_FILE
 	cd $XEMPOWER_DIR
 	echo $(date +%s.%N) " - Making and Installing Xen..."
+	python $EMAIL_SENDER
 	rm $SCHEDULE_DIR/schedule.o
 	sudo colormake -j8 xen | grep 'schedule' && sudo colormake install && sudo ldconfig -v
 	echo $(date +%s.%N) " - Xen installation completed. Reboot"
