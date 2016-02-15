@@ -87,7 +87,7 @@ static struct scheduler __read_mostly ops;
 /* XEMPOWER_TAG */
 
 /* Comment this to disable debug */
-#define _XEMPOWER_DEBUG
+//#define _XEMPOWER_DEBUG
 
 #ifndef CUSTOM_LOGT
     #ifdef _XEMPOWER_DEBUG      
