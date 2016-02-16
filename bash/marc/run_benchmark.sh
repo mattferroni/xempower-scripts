@@ -138,7 +138,13 @@ echo $(date +%s.%N) " - CSV file produced."
 python $WATTUP_DATA_PARSER $WATTSUP_OUTPUT_TMP $WATTSUP_OUTPUT
 rm $WATTSUP_OUTPUT_TMP
 sudo chown -R $CURRENT_USER:$CURRENT_USER $CURRENT_FOLDER
-	
+
+echo $(date +%s.%N) " - Compressing results..."
+tar -zcvf $CURRENT_FOLDER.tar.gz $CURRENT_FOLDER
+rm -r $CURRENT_FOLDER
+sudo chown -R $CURRENT_USER:$CURRENT_USER $CURRENT_FOLDER.tar.gz
+echo $(date +%s.%N) " - Results compressed"
+
 VALUE_TO_APPEND=$(cat $ITERATION_FILE | sed 's/[^0-9]*//g')
 NEXT_VALUE=$(($VALUE_TO_APPEND + 1))
 
@@ -154,6 +160,7 @@ if [ "$NEXT_VALUE" -le "$MAX_ITERATION" ]; then
 	echo $NEXT_VALUE > $ITERATION_FILE
 	cd $XEMPOWER_DIR
 	echo $(date +%s.%N) " - Making and Installing Xen..."
+
 	python $EMAIL_SENDER
 	rm $SCHEDULE_DIR/schedule.o
 	sudo colormake -j8 xen | grep 'schedule' && sudo colormake install && sudo ldconfig -v
