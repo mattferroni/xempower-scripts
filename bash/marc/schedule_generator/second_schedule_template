@@ -1,7 +1,7 @@
     write_msr(IA32_FIXED_CTR0, ZERO_VALUE, ZERO_VALUE);                         /* writing on: ia32_fixed_ctr0: zero value (Vol. 3C, Page 35-18) */
     write_msr(IA32_FIXED_CTR1, ZERO_VALUE, ZERO_VALUE);                         /* writing on: ia32_fixed_ctr1: zero value (Vol. 3C, Page 35-18) */
     write_msr(IA32_FIXED_CTR2, ZERO_VALUE, ZERO_VALUE);                         /* writing on: ia32_fixed_ctr2: zero value (Vol. 3C, Page 35-18) */
-    write_msr(IA32_PEBS_ENABLE, ENABLE_PMC_0_3, ZERO_VALUE);                    /* writing on: ia32_pebs_enable: enable pmc0-pmc3*/
+   // write_msr(IA32_PEBS_ENABLE, ENABLE_PMC_0_3, ZERO_VALUE);                    /* writing on: ia32_pebs_enable: enable pmc0-pmc3*/
     write_msr(IA32_PERF_FIXED_CTR_CTRL, ENABLE_CTR_0_2_USER_MODE, ZERO_VALUE);  /* writing on: ia32_perf_fixed_ctr_ctrl; ensure 3 FFCs enabled, user-level monitoring */
     write_msr(IA32_PERF_GLOBAL_CTRL, ENABLE_PMC_0_3, ENABLE_CTR_0_2);           /* writing on: ia32_perf_global_ctrl: enable 8 PMCs & 3 FFCs */
     write_msr(IA32_MPERF_REG, ZERO_VALUE, ZERO_VALUE);                          /*writing on: ia32_aperf: reset value*/
