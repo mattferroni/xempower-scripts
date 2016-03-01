@@ -37,7 +37,7 @@ MAX_ITERATION=8
 CURRENT_USER=$(stat -c '%U' $HOME)
 # Current date-time format (e.g.: 2013-07-07-16.10)
 NOW=`/bin/date +"%Y-%m-%d-%H.%M"`
-CURRENT_FOLDER=$TESTS_FOLDER/xentrace-to-rapl-$NOW
+CURRENT_FOLDER=$TESTS_FOLDER/ctr-variance-$NOW
 MAPPING_FILE=$CURRENT_FOLDER"/domain_mapping.csv"
 WATTSUP_OUTPUT_TMP=$CURRENT_FOLDER"/watts-up-tmp"
 WATTSUP_OUTPUT=$CURRENT_FOLDER"/wattsup-watts"
@@ -87,6 +87,12 @@ sleep 1
 eval ${WATTSUP_START_LOG}
 echo $(date +%s.%N) " - Watt's up? Power Meter started."
 
+
+echo $(date +%s.%N) " - Starting Xentrace..."
+$START_XENTRACE_SCRIPT $CURRENT_FOLDER
+START=$(date +%s.%N)
+echo $(date +%s.%N) " - Xentrace started."
+
 sleep 5
 
 echo $(date +%s.%N) " - Starting benchmarks Marc..."
@@ -99,18 +105,13 @@ MAPPING_MARC=$(sudo xl list marc |awk '{print $2}' | sed -n 2p)
 echo "marc,"$MAPPING_MARC >> $MAPPING_FILE
 echo $(date +%s.%N) " - Marc domain started"
 
-echo $(date +%s.%N) " - Starting Xentrace..."
-$START_XENTRACE_SCRIPT $CURRENT_FOLDER
-START=$(date +%s.%N)
-echo $(date +%s.%N) " - Xentrace started."
-
 sleep 60
 
 echo $(date +%s.%N) " - Sending commands to Marc domain..."
-ssh marc@10.0.0.2 'screen -d -m stress --cpu 2 --timeout 300s'
+ssh marc@10.0.0.2 'screen -d -m /home/marc/bench_abstrac'
 echo $(date +%s.%N) " - Command sent"
 
-sleep 300s
+sleep 1266s
 
 echo $(date +%s.%N) " - Stopping domain marc..."
 ssh marc@10.0.0.2 'sudo halt'
@@ -150,17 +151,15 @@ NEXT_VALUE=$(($VALUE_TO_APPEND + 1))
 if [ "$NEXT_VALUE" -le "$MAX_ITERATION" ]; then
 
 	echo $(date +%s.%N) " - Changing schedule..."
-	mv $SCHEDULE_FILE $SCHEDULE_FILE$VALUE_TO_APPEND
-	mv $START_XENTRACE_TAIL $START_XENTRACE_TAIL$VALUE_TO_APPEND
-	mv $SCHEDULE_FILE$NEXT_VALUE $SCHEDULE_FILE
-	mv $START_XENTRACE_TAIL$NEXT_VALUE $START_XENTRACE_TAIL
+	#mv $SCHEDULE_FILE $SCHEDULE_FILE$VALUE_TO_APPEND
+	#mv $START_XENTRACE_TAIL $START_XENTRACE_TAIL$VALUE_TO_APPEND
+	#mv $SCHEDULE_FILE$NEXT_VALUE $SCHEDULE_FILE
+	#mv $START_XENTRACE_TAIL$NEXT_VALUE $START_XENTRACE_TAIL
 	echo $(date +%s.%N) " - Schedule changed"
 
 	echo $NEXT_VALUE > $ITERATION_FILE
 	cd $XEMPOWER_DIR
 	echo $(date +%s.%N) " - Making and Installing Xen..."
-
-	python $EMAIL_SENDER
 
 	rm $SCHEDULE_DIR/schedule.o
 	sudo colormake -j8 xen | grep 'schedule' && sudo colormake install && sudo ldconfig -v
@@ -169,7 +168,7 @@ if [ "$NEXT_VALUE" -le "$MAX_ITERATION" ]; then
 else
 	echo $(date +%s.%N) " - Restoring files..."
 	rm $ITERATION_FILE
-	$RESTORE_FILES $HOME $MAX_ITERATION
+	#$RESTORE_FILES $HOME $MAX_ITERATION
 	echo $(date +%s.%N) " - Files restored"
 	python $EMAIL_SENDER
 fi

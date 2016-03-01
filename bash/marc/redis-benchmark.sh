@@ -37,7 +37,7 @@ MAX_ITERATION=8
 CURRENT_USER=$(stat -c '%U' $HOME)
 # Current date-time format (e.g.: 2013-07-07-16.10)
 NOW=`/bin/date +"%Y-%m-%d-%H.%M"`
-CURRENT_FOLDER=$TESTS_FOLDER/xentrace-to-rapl-$NOW
+CURRENT_FOLDER=$TESTS_FOLDER/redis-bench-$NOW
 MAPPING_FILE=$CURRENT_FOLDER"/domain_mapping.csv"
 WATTSUP_OUTPUT_TMP=$CURRENT_FOLDER"/watts-up-tmp"
 WATTSUP_OUTPUT=$CURRENT_FOLDER"/wattsup-watts"
@@ -107,10 +107,10 @@ echo $(date +%s.%N) " - Xentrace started."
 sleep 60
 
 echo $(date +%s.%N) " - Sending commands to Marc domain..."
-ssh marc@10.0.0.2 'screen -d -m stress --cpu 2 --timeout 300s'
+ssh marc@10.0.0.2 'screen -d -m /home/marc/redis_bench.sh'
 echo $(date +%s.%N) " - Command sent"
 
-sleep 300s
+sleep 480s
 
 echo $(date +%s.%N) " - Stopping domain marc..."
 ssh marc@10.0.0.2 'sudo halt'

@@ -24,7 +24,7 @@ with open(DICTIONARY) as f:
     	dictionary_label[data[0]] = data[1].replace("\n","")
 
 print label_list
-for i in range(0,8):
+for i in range(0,9):
 	schedule = OUTPUT_DIR+"/schedule.c"
 	xentrace = OUTPUT_DIR+"/xentrace_tail"
 	if i != 0:

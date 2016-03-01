@@ -33,7 +33,7 @@ WATTSUP_GET_DATA="echo '#D,R,0;' > $WATTSUP_USB"
 WATTSUP_CLEAR="echo '#R,W,0;' > $WATTSUP_USB"
 
 EXECUTION_TIME=4080
-MAX_ITERATION=7
+MAX_ITERATION=8
 CURRENT_USER=$(stat -c '%U' $HOME)
 # Current date-time format (e.g.: 2013-07-07-16.10)
 NOW=`/bin/date +"%Y-%m-%d-%H.%M"`

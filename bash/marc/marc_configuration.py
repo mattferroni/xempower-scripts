@@ -36,7 +36,7 @@ class MarcConfiguration:pass
 
 	SCHEDULES_USED 					= TESTS_FOLDER+"/schedule_used"
 
-	SCHEDULES_TO_STUDY				= 7
+	SCHEDULES_TO_STUDY				= 8
 
 	def __init__(self):
 		self.now_time 				= strftime("%Y-%m-%d-%H.%M", gmtime())
@@ -45,3 +45,25 @@ class MarcConfiguration:pass
 		self.mapping_file 			= self.current_test_folder+"/domain_mapping.csv"
 		self.wattsup_tmp 			= self.current_test_folder+"/watts-up-tmp"
 		self.wattsup_output 		= self.current_test_folder+"/wattsup-watts"
+
+
+
+	def cpu_tests(self):
+
+
+
+	def mem_tests(self):
+
+
+
+	def io_tests(self):
+
+
+	def cpu_io_tests(self):
+
+
+	def mem_io_tests(self):
+
+		
+
+
