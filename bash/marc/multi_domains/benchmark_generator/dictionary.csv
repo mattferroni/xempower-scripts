@@ -1,0 +1,6 @@
+/home/marc/benchmarks/BT,/home/marc/benchmarks/cachebench -w -x1 -e2 -d20
+/home/marc/benchmarks/BT,/home/marc/benchmarks/iozone -a -i 0
+/home/marc/benchmarks/BT,/home/marc/benchmarks/BT
+/home/marc/benchmarks/cachebench -w -x1 -e2 -d20,/home/marc/benchmarks/iozone -a -i 0
+/home/marc/benchmarks/cachebench -w -x1 -e2 -d20,/home/marc/benchmarks/cachebench -w -x1 -e2 -d20
+/home/marc/benchmarks/iozone -a -i 0,/home/marc/benchmarks/iozone -a -i 0

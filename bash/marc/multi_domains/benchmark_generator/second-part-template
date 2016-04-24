@@ -1,0 +1,50 @@
+echo $(date +%s.%N) " - Stopping domain marc..."
+ssh marc@10.0.0.5 'sudo halt'
+echo $(date +%s.%N) " - Domain marc stopped."
+
+sleep 150s
+
+echo $(date +%s.%N) " - Stopping domain marc..."
+ssh marc@10.0.0.4 'sudo halt'
+echo $(date +%s.%N) " - Domain marc stopped."
+
+sleep 5s
+
+echo $(date +%s.%N) " - Stopping Xentrace..."
+$STOP_XENTRACE
+END=$(date +%s.%N)
+DIFF=$(echo "$END - $START" | bc)
+echo $(date +%s.%N) " - Xentrace stopped. Duration: "$DIFF"s."
+
+
+echo $(date +%s.%N) " - Stopping wattsup log..."
+$WATTSUP_READER $WATTSUP_USB $WATTSUP_OUTPUT_TMP & 
+sleep 1
+eval ${WATTSUP_GET_DATA}
+eval ${WATTSUP_LOW_LOAD}
+
+echo $(date +%s.%N) " - Parsing trace data..."
+$PARSE_DATA $CURRENT_FOLDER
+echo $(date +%s.%N) " - CSV file produced."
+python $WATTUP_DATA_PARSER $WATTSUP_OUTPUT_TMP $WATTSUP_OUTPUT
+rm $WATTSUP_OUTPUT_TMP
+sudo chown -R $CURRENT_USER:$CURRENT_USER $CURRENT_FOLDER
+
+echo $(date +%s.%N) " - Compressing results..."
+tar -zcvf $CURRENT_FOLDER.tar.gz $CURRENT_FOLDER
+rm -r $CURRENT_FOLDER
+mv $CURRENT_FOLDER.tar.gz $TESTS_FOLDER/$NAME_BENCH.tar.gz
+sudo chown -R $CURRENT_USER:$CURRENT_USER $TESTS_FOLDER/$NAME_BENCH.tar.gz
+echo $(date +%s.%N) " - Results compressed"
+
+python $EMAIL_SENDER
+
+VALUE_TO_APPEND=$(cat $ITERATION_FILE | sed 's/[^0-9]*//g')
+NEXT_VALUE=$(($VALUE_TO_APPEND + 1))
+
+if [ "$NEXT_VALUE" -le "$MAX_ITERATION" ]; then
+	mv $CURRENT_FILE $CURRENT_FILE$VALUE_TO_APPEND
+	mv $CURRENT_FILE$NEXT_VALUE $CURRENT_FILE
+	echo $NEXT_VALUE > $ITERATION_FILE
+	sudo reboot
+fi
